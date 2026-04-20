@@ -1,0 +1,469 @@
+{
+  "name": "HRMDSP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "c0231d8d-7b7e-477e-95ae-3898e2e11190",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "YOUR_APOLLO_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"person_titles\": [\"Recruiter\", \"Talent Acquisition\", \"HR Manager\", \"Staffing Manager\"],\n  \"person_locations\": [\"United States\"],\n  \"page\": 1,\n  \"per_page\": 25,\n  \"email_status\": [\"verified\"],\n  \"prospected_by_current_team\": [\"no\"]\n}",
+        "options": {}
+      },
+      "id": "68264a76-b529-4171-a977-ba023d6bf234",
+      "name": "Apollo Search Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "people",
+        "options": {}
+      },
+      "id": "165a762b-285a-41c8-b865-773640344212",
+      "name": "Split Into Individual Leads",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "email-check",
+              "leftValue": "={{ $json.email_status }}",
+              "rightValue": "verified",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "email-exists",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "02d069ac-ad8e-42a1-92da-7934a76f0689",
+      "name": "Filter Verified Emails Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "YOUR_APOLLO_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.email }}\",\n  \"reveal_phone_number\": true,\n  \"reveal_personal_emails\": false\n}",
+        "options": {}
+      },
+      "id": "64f2c9ec-23dc-4611-84cb-04179fe327e5",
+      "name": "Apollo Enrich + Phone Reveal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        160,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_TABLE_ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "First Name": "={{ $json.person.first_name }}",
+            "Last Name": "={{ $json.person.last_name }}",
+            "Email": "={{ $json.person.email }}",
+            "Email Status": "={{ $json.person.email_status }}",
+            "Phone": "={{ $json.person.phone_numbers && $json.person.phone_numbers[0] ? $json.person.phone_numbers[0].sanitized_number : '' }}",
+            "Company": "={{ $json.person.organization ? $json.person.organization.name : '' }}",
+            "Title": "={{ $json.person.title }}",
+            "LinkedIn URL": "={{ $json.person.linkedin_url }}",
+            "Location": "={{ $json.person.city }}, {{ $json.person.state }}",
+            "Lead Source": "Apollo",
+            "Workflow Status": "Enriched"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8f0f3eb0-467e-48f9-b155-f77712afeccf",
+      "name": "Save to Airtable CRM",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        368,
+        208
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.reply.io/v1/people",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "YOUR_REPLY_IO_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.email }}\",\n  \"firstName\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.first_name }}\",\n  \"lastName\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.last_name }}\",\n  \"phone\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers && $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers[0] ? $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers[0].sanitized_number : '' }}\",\n  \"company\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.organization ? $('Apollo Enrich + Phone Reveal').item.json.person.organization.name : '' }}\",\n  \"title\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.title }}\",\n  \"linkedInUrl\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.linkedin_url }}\",\n  \"city\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.city }}\"\n}",
+        "options": {}
+      },
+      "id": "be835c3d-1ecb-4bfb-98ac-4a1425402072",
+      "name": "Add to Reply.io",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        560,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.reply.io/v1/campaigns/YOUR_CAMPAIGN_ID/people",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "YOUR_REPLY_IO_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"peopleIds\": [{{ $json.id }}]\n}",
+        "options": {}
+      },
+      "id": "74ecab7a-ba89-4f77-b757-b82dfd9106ea",
+      "name": "Add to Reply Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        768,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.powerdialer.ai/v1/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.first_name }}\",\n  \"last_name\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.last_name }}\",\n  \"email\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.email }}\",\n  \"phone\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers && $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers[0] ? $('Apollo Enrich + Phone Reveal').item.json.person.phone_numbers[0].sanitized_number : '' }}\",\n  \"company\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.organization ? $('Apollo Enrich + Phone Reveal').item.json.person.organization.name : '' }}\",\n  \"title\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.title }}\",\n  \"linkedin_url\": \"{{ $('Apollo Enrich + Phone Reveal').item.json.person.linkedin_url }}\",\n  \"tags\": [\"from-apollo\", \"verified-email\", \"enriched\"]\n}",
+        "options": {}
+      },
+      "id": "3a914474-adad-4de0-89ad-fcb40d289c92",
+      "name": "Add to PowerDialer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.powerdialer.ai/v1/campaigns/YOUR_POWERDIALER_CAMPAIGN_ID/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contact_id\": \"{{ $json.id }}\"\n}",
+        "options": {}
+      },
+      "id": "2b04b0eb-d1d7-4541-a1d0-a522e472d536",
+      "name": "Add to Dialer Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        768,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_TABLE_ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow Status": "Pushed to Reply.io + PowerDialer",
+            "Reply Campaign": "Added",
+            "PowerDialer Campaign": "Added"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "517b332a-1a35-423a-840f-1c9f2f6ecc2f",
+      "name": "Final Status Update in Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        960,
+        208
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Apollo Search Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Search Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Into Individual Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Individual Leads": {
+      "main": [
+        [
+          {
+            "node": "Filter Verified Emails Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Verified Emails Only": {
+      "main": [
+        [
+          {
+            "node": "Apollo Enrich + Phone Reveal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Enrich + Phone Reveal": {
+      "main": [
+        [
+          {
+            "node": "Save to Airtable CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Airtable CRM": {
+      "main": [
+        [
+          {
+            "node": "Add to Reply.io",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Add to PowerDialer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Reply.io": {
+      "main": [
+        [
+          {
+            "node": "Add to Reply Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to PowerDialer": {
+      "main": [
+        [
+          {
+            "node": "Add to Dialer Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Reply Campaign": {
+      "main": [
+        [
+          {
+            "node": "Final Status Update in Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Dialer Campaign": {
+      "main": [
+        [
+          {
+            "node": "Final Status Update in Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
